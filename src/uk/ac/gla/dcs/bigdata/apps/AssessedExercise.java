@@ -164,6 +164,14 @@ public class AssessedExercise {
 		KeyValueGroupedDataset<String, TermDocument> termByDoc = termsg.groupByKey(keyFunction, Encoders.STRING());
 		
 		
+		// term corpus 
+		
+		
+		// broadcast term corpus
+		
+		
+		
+		
 		
 		// calculate dph score
 //		GetDphScore dphScore = new GetDphScore(broadcastDocumentLengthCorpus, broadcastDocNumbers,
