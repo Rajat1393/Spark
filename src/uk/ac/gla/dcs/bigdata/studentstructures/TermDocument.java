@@ -16,8 +16,27 @@ public class TermDocument {
 
 	String term;
 	NewsArticle document;
+	int currentDocumentLength;
+	double dphScore;
+	
+	public int getCurrentDocumentLength() {
+		return currentDocumentLength;
+	}
+
+	public void setCurrentDocumentLength(int currentDocumentLength) {
+		this.currentDocumentLength = currentDocumentLength;
+	}
+
 	public NewsArticle getDocument() {
 		return document;
+	}
+
+	public double getDphScore() {
+		return dphScore;
+	}
+
+	public void setDphScore(double dphScore) {
+		this.dphScore = dphScore;
 	}
 
 	public void setDocument(NewsArticle document) {

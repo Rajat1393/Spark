@@ -18,6 +18,7 @@ import uk.ac.gla.dcs.bigdata.providedstructures.DocumentRanking;
 import uk.ac.gla.dcs.bigdata.providedstructures.NewsArticle;
 import uk.ac.gla.dcs.bigdata.providedstructures.Query;
 import uk.ac.gla.dcs.bigdata.studentfunctions.DocumentTermsProcessingFlatMap;
+import uk.ac.gla.dcs.bigdata.studentfunctions.GetDphScore;
 import uk.ac.gla.dcs.bigdata.studentfunctions.GetMapping;
 import uk.ac.gla.dcs.bigdata.studentfunctions.StopF;
 import uk.ac.gla.dcs.bigdata.studentfunctions.StopWordRemovalFlatMap;
@@ -138,26 +139,43 @@ public class AssessedExercise {
 		StopF stop = new StopF();
 		Dataset<String> p = queries.flatMap(stop, Encoders.STRING());
 		List<String> terms = p.collectAsList();
+		// Broadcast values
 
 		Broadcast<List<String>> broadcastTerms = JavaSparkContext.fromSparkContext(spark.sparkContext())
 				.broadcast(terms);
+		Broadcast<Long> broadcastDocumentLengthCorpus = JavaSparkContext.fromSparkContext(spark.sparkContext())
+				.broadcast(documentLengthCorpus);
 
-		// GetTermAndDocument getD = new GetTermAndDocument();
+		Broadcast<Long> broadcastDocNumbers = JavaSparkContext.fromSparkContext(spark.sparkContext())
+				.broadcast(docNumbers);
+
+		Broadcast<Double> broadcastAverageLength = JavaSparkContext.fromSparkContext(spark.sparkContext())
+				.broadcast(averageLength);
 
 		GetMapping getu = new GetMapping(broadcastTerms);
 		Dataset<TermDocument> termsg = processedDocuments.flatMap(getu, Encoders.bean(TermDocument.class));
-		List<TermDocument> termsgList = termsg.collectAsList();
+		//List<TermDocument> termsgList = termsg.collectAsList();
 
+		// calculate dph score
+		GetDphScore dphScore = new GetDphScore(broadcastDocumentLengthCorpus, broadcastDocNumbers,
+				broadcastAverageLength);
+		Dataset<TermDocument> termsDocumentWithScore = termsg.flatMap(dphScore, Encoders.bean(TermDocument.class));
+		List<TermDocument> termsgList = termsDocumentWithScore.collectAsList();
+		
+		
 		for (TermDocument termDocument : termsgList) {
 
 			if (termDocument.getCount() > 0) {
 
 				System.out.println("term >>>>>  " + termDocument.getTerm() + "    documentId   "
-						+ termDocument.getDocument().getId() + "   count     " + termDocument.getCount());
+						+ termDocument.getDocument().getId() + "   count     " + termDocument.getCount()
+						+ " doc length " + termDocument.getCurrentDocumentLength()+ "    DPH   Score"+termDocument.getDphScore());
 
 			}
 		}
-
+		
+		
+		
 		return null; // replace this with the the list of DocumentRanking output by your topology
 	}
 
