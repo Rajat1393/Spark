@@ -1,7 +1,9 @@
 package uk.ac.gla.dcs.bigdata.apps;
 
 import java.io.File;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 
 import org.apache.spark.SparkConf;
 import org.apache.spark.api.java.JavaSparkContext;
@@ -19,10 +21,13 @@ import uk.ac.gla.dcs.bigdata.providedstructures.DocumentRanking;
 import uk.ac.gla.dcs.bigdata.providedstructures.NewsArticle;
 import uk.ac.gla.dcs.bigdata.providedstructures.Query;
 import uk.ac.gla.dcs.bigdata.studentfunctions.DocumentTermsProcessingFlatMap;
+import uk.ac.gla.dcs.bigdata.studentfunctions.GetDphScore;
 import uk.ac.gla.dcs.bigdata.studentfunctions.GetMapping;
 import uk.ac.gla.dcs.bigdata.studentfunctions.GetTermCorpusCount;
 import uk.ac.gla.dcs.bigdata.studentfunctions.StopF;
 import uk.ac.gla.dcs.bigdata.studentfunctions.StopWordRemovalFlatMap;
+import uk.ac.gla.dcs.bigdata.studentfunctions.TermGroups;
+import uk.ac.gla.dcs.bigdata.studentstructures.TermCorpus;
 import uk.ac.gla.dcs.bigdata.studentstructures.TermDocument;
 
 /**
@@ -164,33 +169,42 @@ public class AssessedExercise {
 		KeyValueGroupedDataset<String, TermDocument> termByDoc = termsg.groupByKey(keyFunction, Encoders.STRING());
 		
 		
-		// term corpus 
 		
-		
-		// broadcast term corpus
-		
-		
-		
-		
-		
-		// calculate dph score
-//		GetDphScore dphScore = new GetDphScore(broadcastDocumentLengthCorpus, broadcastDocNumbers,
-//				broadcastAverageLength);
-//		Dataset<TermDocument> termsDocumentWithScore = termsg.flatMap(dphScore, Encoders.bean(TermDocument.class));
-//		List<TermDocument> termsgList = termsDocumentWithScore.collectAsList();
-//		
-//		
-//		for (TermDocument termDocument : termsgList) {
-//
-//			if (termDocument.getCount() > 0) {
-//
-//				System.out.println("term >>>>>  " + termDocument.getTerm() + "    documentId   "
-//						+ termDocument.getDocument().getId() + "   count     " + termDocument.getCount()
-//						+ " doc length " + termDocument.getCurrentDocumentLength()+ "    DPH   Score"+termDocument.getDphScore());
-//
-//			}
+		TermGroups termgr=new TermGroups();
+        Dataset<TermCorpus> termc=termByDoc.flatMapGroups(termgr,Encoders.bean(TermCorpus.class));
+        List<TermCorpus> termclist=termc.collectAsList();
+        
+//        for (TermCorpus termCorpus : termclist) {
+//			System.out.println(termCorpus.getTerm()+ "   " +termCorpus.getCountCorpus());
 //		}
-//		
+        
+        
+        Map<String, Integer> map = new HashMap<>();
+        for (TermCorpus ter : termclist) {
+            map.put(ter.getTerm(), ter.getCountCorpus());
+        }
+        
+        Broadcast<Map<String, Integer>> broadcasttermclist = JavaSparkContext.fromSparkContext(spark.sparkContext()).broadcast(map);
+		
+		
+		
+		GetDphScore dphScore = new GetDphScore(broadcastDocumentLengthCorpus, broadcastDocNumbers,
+				broadcastAverageLength,broadcasttermclist);
+		Dataset<TermDocument> termsDocumentWithScore = termsg.flatMap(dphScore, Encoders.bean(TermDocument.class));
+		List<TermDocument> termsgList = termsDocumentWithScore.collectAsList();
+		
+		
+		for (TermDocument termDocument : termsgList) {
+
+			if (termDocument.getCount() > 0) {
+
+				System.out.println("term >>>>>  " + termDocument.getTerm() + "    documentId   "
+						+ termDocument.getDocument().getId() + "   count     " + termDocument.getCount()
+						+ " doc length " + termDocument.getCurrentDocumentLength()+ "    DPH   Score"+termDocument.getDphScore());
+
+			}
+		}
+		
 		
 		
 		return null; // replace this with the the list of DocumentRanking output by your topology
