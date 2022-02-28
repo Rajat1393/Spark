@@ -1,9 +1,14 @@
 package uk.ac.gla.dcs.bigdata.apps;
 
 import java.io.File;
+import java.io.FileWriter;
+import java.io.IOException;
+import java.util.Collections;
+import java.util.Comparator;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.stream.Collectors;
 
 import org.apache.spark.SparkConf;
 import org.apache.spark.api.java.JavaSparkContext;
@@ -15,18 +20,24 @@ import org.apache.spark.sql.Row;
 import org.apache.spark.sql.SparkSession;
 import org.apache.spark.util.LongAccumulator;
 
+import com.google.common.base.Predicate;
+
+import scala.Tuple3;
 import uk.ac.gla.dcs.bigdata.providedfunctions.NewsFormaterMap;
 import uk.ac.gla.dcs.bigdata.providedfunctions.QueryFormaterMap;
 import uk.ac.gla.dcs.bigdata.providedstructures.DocumentRanking;
 import uk.ac.gla.dcs.bigdata.providedstructures.NewsArticle;
 import uk.ac.gla.dcs.bigdata.providedstructures.Query;
 import uk.ac.gla.dcs.bigdata.studentfunctions.DocumentTermsProcessingFlatMap;
+import uk.ac.gla.dcs.bigdata.studentfunctions.GetDocumentRank;
 import uk.ac.gla.dcs.bigdata.studentfunctions.GetDphScore;
 import uk.ac.gla.dcs.bigdata.studentfunctions.GetMapping;
 import uk.ac.gla.dcs.bigdata.studentfunctions.GetTermCorpusCount;
 import uk.ac.gla.dcs.bigdata.studentfunctions.StopF;
 import uk.ac.gla.dcs.bigdata.studentfunctions.StopWordRemovalFlatMap;
 import uk.ac.gla.dcs.bigdata.studentfunctions.TermGroups;
+import uk.ac.gla.dcs.bigdata.studentfunctions.TransformTuples;
+import uk.ac.gla.dcs.bigdata.studentstructures.RankDocuments;
 import uk.ac.gla.dcs.bigdata.studentstructures.TermCorpus;
 import uk.ac.gla.dcs.bigdata.studentstructures.TermDocument;
 
@@ -42,7 +53,7 @@ import uk.ac.gla.dcs.bigdata.studentstructures.TermDocument;
  */
 public class AssessedExercise {
 
-	public static void main(String[] args) {
+	public static void main(String[] args) throws IOException {
 
 		File hadoopDIR = new File("resources/hadoop/"); // represent the hadoop directory as a Java file so we can get
 														// an absolute path for it
@@ -103,7 +114,8 @@ public class AssessedExercise {
 
 	}
 
-	public static List<DocumentRanking> rankDocuments(SparkSession spark, String queryFile, String newsFile) {
+	public static List<DocumentRanking> rankDocuments(SparkSession spark, String queryFile, String newsFile)
+			throws IOException {
 
 		// Load queries and news articles
 		Dataset<Row> queriesjson = spark.read().text(queryFile);
@@ -158,55 +170,88 @@ public class AssessedExercise {
 		Broadcast<Double> broadcastAverageLength = JavaSparkContext.fromSparkContext(spark.sparkContext())
 				.broadcast(averageLength);
 
-		
-		
-		
 		GetMapping getu = new GetMapping(broadcastTerms);
 		Dataset<TermDocument> termsg = processedDocuments.flatMap(getu, Encoders.bean(TermDocument.class));
-		//List<TermDocument> termsgList = termsg.collectAsList();
+		// List<TermDocument> termsgList = termsg.collectAsList();
 
 		GetTermCorpusCount keyFunction = new GetTermCorpusCount();
 		KeyValueGroupedDataset<String, TermDocument> termByDoc = termsg.groupByKey(keyFunction, Encoders.STRING());
-		
-		
-		
-		TermGroups termgr=new TermGroups();
-        Dataset<TermCorpus> termc=termByDoc.flatMapGroups(termgr,Encoders.bean(TermCorpus.class));
-        List<TermCorpus> termclist=termc.collectAsList();
-        
+
+		TermGroups termgr = new TermGroups();
+		Dataset<TermCorpus> termc = termByDoc.flatMapGroups(termgr, Encoders.bean(TermCorpus.class));
+		List<TermCorpus> termclist = termc.collectAsList();
+
 //        for (TermCorpus termCorpus : termclist) {
 //			System.out.println(termCorpus.getTerm()+ "   " +termCorpus.getCountCorpus());
 //		}
-        
-        
-        Map<String, Integer> map = new HashMap<>();
-        for (TermCorpus ter : termclist) {
-            map.put(ter.getTerm(), ter.getCountCorpus());
-        }
-        
-        Broadcast<Map<String, Integer>> broadcasttermclist = JavaSparkContext.fromSparkContext(spark.sparkContext()).broadcast(map);
-		
-		
-		
+
+		Map<String, Integer> map = new HashMap<>();
+		for (TermCorpus ter : termclist) {
+			map.put(ter.getTerm(), ter.getCountCorpus());
+		}
+
+		Broadcast<Map<String, Integer>> broadcasttermclist = JavaSparkContext.fromSparkContext(spark.sparkContext())
+				.broadcast(map);
+
 		GetDphScore dphScore = new GetDphScore(broadcastDocumentLengthCorpus, broadcastDocNumbers,
-				broadcastAverageLength,broadcasttermclist);
+				broadcastAverageLength, broadcasttermclist);
 		Dataset<TermDocument> termsDocumentWithScore = termsg.flatMap(dphScore, Encoders.bean(TermDocument.class));
 		List<TermDocument> termsgList = termsDocumentWithScore.collectAsList();
-		
-		
-		for (TermDocument termDocument : termsgList) {
 
-			if (termDocument.getCount() > 0) {
+		TransformTuples tu = new TransformTuples();
 
-				System.out.println("term >>>>>  " + termDocument.getTerm() + "    documentId   "
-						+ termDocument.getDocument().getId() + "   count     " + termDocument.getCount()
-						+ " doc length " + termDocument.getCurrentDocumentLength()+ "    DPH   Score"+termDocument.getDphScore());
+		Dataset<Tuple3<String, NewsArticle, Double>> termtransform = termsDocumentWithScore.map(tu,
+				Encoders.tuple(Encoders.STRING(), Encoders.bean(NewsArticle.class), Encoders.DOUBLE()));
+		List<Tuple3<String, NewsArticle, Double>> termtransformlist = termtransform.collectAsList();
+		Broadcast<List<Tuple3<String, NewsArticle, Double>>> broadcasttransformlist = JavaSparkContext
+				.fromSparkContext(spark.sparkContext()).broadcast(termtransformlist);
+		GetDocumentRank getrank = new GetDocumentRank(broadcasttransformlist);
 
-			}
-		}
+		Dataset<RankDocuments> ranks = processedQueries.flatMap(getrank, Encoders.bean(RankDocuments.class));
 		
+		List<RankDocuments> ranksDocList = ranks.collectAsList();
+
+		Collections.sort(ranksDocList, Collections.reverseOrder());
+
+		// ranksDocList.removeIf(n -> Double.isNaN(n.getDhpscore())) ;
+//		Comparator<RankDocuments> compareById = 
+//				(RankDocuments o1, RankDocuments o2) -> o1.getDocid().compareTo( o2.getDocid());
+//		Collections.sort(ranksDocList, compareById);
+//
+//		
+//		for (RankDocuments rankDocuments : ranksDocList) {
+//			
+//				System.out.println(rankDocuments.toString());
+//		
+//			
+//		}
+
+		Map<String, List<RankDocuments>> studlistGrouped = ranksDocList.stream()
+				.filter(c -> !Double.valueOf(c.getDhpscore()).isNaN())
+				.collect(Collectors.groupingBy(w -> w.getQuery()));
+
 		
-		
+		//
+//		FileWriter writer = new FileWriter("di.txt");
+//		 for (String key : studlistGrouped.keySet()) {
+//			 writer.write(key + " " + studlistGrouped.get(key)  + System.lineSeparator());
+//		    }
+//		writer.close();
+//		for (TermDocument termDocument : termsgList) {
+//
+//			if (termDocument.getCount() > 0) {
+//
+//				System.out.println("term >>>>>  " + termDocument.getTerm() + "    documentId   "
+//						+ termDocument.getDocument().getId() + "   count     " + termDocument.getCount()
+//						+ " doc length " + termDocument.getCurrentDocumentLength() + "    DPH   Score"
+//						+ termDocument.getDphScore());
+//
+//			}
+//		}
+
+		// doc similarity
+		// remove
+
 		return null; // replace this with the the list of DocumentRanking output by your topology
 	}
 
