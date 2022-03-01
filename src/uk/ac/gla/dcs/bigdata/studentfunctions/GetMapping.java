@@ -26,15 +26,17 @@ public class GetMapping implements FlatMapFunction<NewsArticle,TermDocument>{
 		List<TermDocument> termDocumentList = new ArrayList<TermDocument>();
 			
 			List<ContentItem> contentList = t.getContents();
-			int count = 0;
+			
 			List<String> terms = term.value();
 			for (String term : terms) {
+				int count = 0;
 			TermDocument termDocument = new TermDocument();
 			int documentLength = 0;
 			for (ContentItem contentItem : contentList) {
 				documentLength = documentLength + contentItem.getContent().length();
 				 count = count + countOccurrences(contentItem.getContent(), term);	
 			}
+			
 			termDocument.setCount(count);
 			termDocument.setDocument(t);
 			termDocument.setTerm(term);

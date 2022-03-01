@@ -1,40 +1,51 @@
 package uk.ac.gla.dcs.bigdata.studentstructures;
 
 import uk.ac.gla.dcs.bigdata.providedstructures.NewsArticle;
+import uk.ac.gla.dcs.bigdata.providedstructures.Query;
 
 public class RankDocuments implements Comparable<RankDocuments> {
 	String query;
-	NewsArticle docid;
+	NewsArticle doc;
 	double dhpscore;
-	public String getQuery() {
-		return query;
-	}
-	public void setQuery(String query) {
-		this.query = query;
-	}
+
 
 	
-	@Override
-	public String toString() {
-		return "RankDocuments [query=" + query + ", docid=" + docid + ", dhpscore=" + dhpscore + "]";
-	}
+	
 	public RankDocuments() {
 		
 	}
 	
 
-	public RankDocuments(String query, NewsArticle docid, double dhpscore) {
+
+	public String getQuery() {
+		return query;
+	}
+
+
+
+	public void setQuery(String query) {
+		this.query = query;
+	}
+
+
+
+	public RankDocuments(String query, NewsArticle doc, double dhpscore) {
 		super();
 		this.query = query;
-		this.docid = docid;
+		this.doc = doc;
 		this.dhpscore = dhpscore;
 	}
-	public NewsArticle getDocid() {
-		return docid;
+
+
+
+	public NewsArticle getDoc() {
+		return doc;
 	}
-	public void setDocid(NewsArticle docid) {
-		this.docid = docid;
+	public void setDoc(NewsArticle doc) {
+		this.doc = doc;
 	}
+	
+	
 	public double getDhpscore() {
 		return dhpscore;
 	}
@@ -44,7 +55,7 @@ public class RankDocuments implements Comparable<RankDocuments> {
 	@Override
 	public int compareTo(RankDocuments o) {
 		// TODO Auto-generated method stub
-		return Double.compare(dhpscore, o.getDhpscore());
+		return Double.compare(this.dhpscore, o.getDhpscore());
 	}
 	
 	

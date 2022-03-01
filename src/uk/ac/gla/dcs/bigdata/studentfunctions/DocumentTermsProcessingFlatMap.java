@@ -34,14 +34,20 @@ public class DocumentTermsProcessingFlatMap implements FlatMapFunction<NewsArtic
 			for (String token : tokens) {
 				content = content + " " + token;
 			}
+			
 			documentLengthAccumulator.add(tokens.size());
 			contentItem.setContent(content);
 			stemedContent.add(contentItem);
 		}
 		t.setContents(stemedContent);
 		List<NewsArticle> newsArticle = new ArrayList<NewsArticle>(1);
+		if (t.getTitle() == null || t.getTitle().isEmpty() || t.getTitle().trim().isEmpty()) {
+			
+		}
+		else {
 		totalDocsInCorpusAccumulator.add(1);
 		newsArticle.add(t);
+		}
 		return newsArticle.iterator();
 	}
 

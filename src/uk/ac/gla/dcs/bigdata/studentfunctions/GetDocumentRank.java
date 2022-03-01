@@ -30,42 +30,37 @@ public class GetDocumentRank implements FlatMapFunction<Query, RankDocuments> {
 
 	@Override
 	public Iterator<RankDocuments> call(Query t) throws Exception {
-		List<Tuple3<String, NewsArticle, Double>> termdoc = termdoclist.getValue();
+		List<Tuple3<String, NewsArticle, Double>> termdoc = new ArrayList<Tuple3<String, NewsArticle, Double>>();
+		termdoc = termdoclist.getValue();
 		List<RankDocuments> rankeddocuments = new ArrayList<RankDocuments>();
 		List<String> terms = t.getQueryTerms();
 		RankDocuments r9 = new RankDocuments();
 		for (String y : terms) {
+
 			for (Tuple3<String, NewsArticle, Double> x : termdoc) {
 
 				if (y.equals(x._1())) {
-					
-					boolean docExists = rankeddocuments.stream().anyMatch(item -> x._2().equals(item.getDocid()));	
-					
-					
-					if (docExists) {
-						r9 = rankeddocuments.stream().filter(doc -> x._2().equals(doc.getDocid()))
-								.findAny().orElse(null);
 
+					boolean docExists = rankeddocuments.stream()
+							.anyMatch(item -> x._2().getId().equals(item.getDoc().getId()));
+					if (docExists) {
+						r9 = rankeddocuments.stream().filter(doc -> x._2().getId().equals(doc.getDoc().getId()))
+								.findAny().orElse(null);
+						int index = rankeddocuments.indexOf(r9);
 						if (r9 != null) {
 							r9.setDhpscore(r9.getDhpscore() + x._3());
-							
-						} else {
-							 r9 = new RankDocuments(t.getOriginalQuery(), x._2(), x._3());
-							rankeddocuments.add(r9);
+							rankeddocuments.set(index, r9);
 						}
 					} else {
-						 r9 = new RankDocuments(t.getOriginalQuery(), x._2(), x._3());
+						r9 = new RankDocuments(t.getOriginalQuery(), x._2(), x._3());
 						rankeddocuments.add(r9);
 					}
 
 				}
 			}
 		}
-		
-	
+
 		return rankeddocuments.iterator();
 	}
-	
-	
 
 }

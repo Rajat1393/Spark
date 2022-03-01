@@ -3,9 +3,11 @@ package uk.ac.gla.dcs.bigdata.apps;
 import java.io.File;
 import java.io.FileWriter;
 import java.io.IOException;
+import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Comparator;
 import java.util.HashMap;
+import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
@@ -25,9 +27,12 @@ import com.google.common.base.Predicate;
 import scala.Tuple3;
 import uk.ac.gla.dcs.bigdata.providedfunctions.NewsFormaterMap;
 import uk.ac.gla.dcs.bigdata.providedfunctions.QueryFormaterMap;
+import uk.ac.gla.dcs.bigdata.providedstructures.ContentItem;
 import uk.ac.gla.dcs.bigdata.providedstructures.DocumentRanking;
 import uk.ac.gla.dcs.bigdata.providedstructures.NewsArticle;
 import uk.ac.gla.dcs.bigdata.providedstructures.Query;
+import uk.ac.gla.dcs.bigdata.providedstructures.RankedResult;
+import uk.ac.gla.dcs.bigdata.providedutilities.TextDistanceCalculator;
 import uk.ac.gla.dcs.bigdata.studentfunctions.DocumentTermsProcessingFlatMap;
 import uk.ac.gla.dcs.bigdata.studentfunctions.GetDocumentRank;
 import uk.ac.gla.dcs.bigdata.studentfunctions.GetDphScore;
@@ -40,6 +45,7 @@ import uk.ac.gla.dcs.bigdata.studentfunctions.TransformTuples;
 import uk.ac.gla.dcs.bigdata.studentstructures.RankDocuments;
 import uk.ac.gla.dcs.bigdata.studentstructures.TermCorpus;
 import uk.ac.gla.dcs.bigdata.studentstructures.TermDocument;
+import java.util.function.Function;
 
 /**
  * This is the main class where your Spark topology should be specified.
@@ -141,18 +147,10 @@ public class AssessedExercise {
 				documentLengthAccumulator, totalDocsInCorpusAccumulator);
 		Dataset<NewsArticle> processedDocuments = news.flatMap(documentStopWordRemoval,
 				Encoders.bean(NewsArticle.class));
-
 		processedDocuments.collectAsList();
-
 		long documentLengthCorpus = documentLengthAccumulator.value();
 		long docNumbers = totalDocsInCorpusAccumulator.value();
 		double averageLength = documentLengthCorpus / docNumbers;
-
-		System.out.println("documentLengthCorpus       " + documentLengthCorpus);
-
-		System.out.println("Total doc numbers    " + docNumbers);
-
-		System.out.println(averageLength);
 
 		StopF stop = new StopF();
 		Dataset<String> p = queries.flatMap(stop, Encoders.STRING());
@@ -172,7 +170,7 @@ public class AssessedExercise {
 
 		GetMapping getu = new GetMapping(broadcastTerms);
 		Dataset<TermDocument> termsg = processedDocuments.flatMap(getu, Encoders.bean(TermDocument.class));
-		// List<TermDocument> termsgList = termsg.collectAsList();
+		termsg.collectAsList();
 
 		GetTermCorpusCount keyFunction = new GetTermCorpusCount();
 		KeyValueGroupedDataset<String, TermDocument> termByDoc = termsg.groupByKey(keyFunction, Encoders.STRING());
@@ -180,10 +178,6 @@ public class AssessedExercise {
 		TermGroups termgr = new TermGroups();
 		Dataset<TermCorpus> termc = termByDoc.flatMapGroups(termgr, Encoders.bean(TermCorpus.class));
 		List<TermCorpus> termclist = termc.collectAsList();
-
-//        for (TermCorpus termCorpus : termclist) {
-//			System.out.println(termCorpus.getTerm()+ "   " +termCorpus.getCountCorpus());
-//		}
 
 		Map<String, Integer> map = new HashMap<>();
 		for (TermCorpus ter : termclist) {
@@ -198,6 +192,12 @@ public class AssessedExercise {
 		Dataset<TermDocument> termsDocumentWithScore = termsg.flatMap(dphScore, Encoders.bean(TermDocument.class));
 		List<TermDocument> termsgList = termsDocumentWithScore.collectAsList();
 
+//		FileWriter writer = new FileWriter("jacetk.txt");
+//		for (TermDocument termDocument : termsgList) {
+//			if (termDocument.getTerm().equals("jame")&& termDocument.getDphScore()>0) 
+//			writer.write(termDocument.getDphScore() + "   "+ termDocument.getTerm() + "   "+ termDocument.getDocument().getTitle() + System.lineSeparator());
+//		}
+
 		TransformTuples tu = new TransformTuples();
 
 		Dataset<Tuple3<String, NewsArticle, Double>> termtransform = termsDocumentWithScore.map(tu,
@@ -208,51 +208,77 @@ public class AssessedExercise {
 		GetDocumentRank getrank = new GetDocumentRank(broadcasttransformlist);
 
 		Dataset<RankDocuments> ranks = processedQueries.flatMap(getrank, Encoders.bean(RankDocuments.class));
-		
+
 		List<RankDocuments> ranksDocList = ranks.collectAsList();
 
 		Collections.sort(ranksDocList, Collections.reverseOrder());
-
-		// ranksDocList.removeIf(n -> Double.isNaN(n.getDhpscore())) ;
-//		Comparator<RankDocuments> compareById = 
-//				(RankDocuments o1, RankDocuments o2) -> o1.getDocid().compareTo( o2.getDocid());
-//		Collections.sort(ranksDocList, compareById);
-//
-//		
+//		//FileWriter writer = new FileWriter("jk.txt");
 //		for (RankDocuments rankDocuments : ranksDocList) {
+//				//System.out.println(rankDocuments.getQuery().getOriginalQuery() + "  " + rankDocuments.getDoc().getTitle());
+//				//writer.write(rankDocuments.getQuery() + "  " + rankDocuments.getDoc().getTitle() +" "+ rankDocuments.getDhpscore()  + System.lineSeparator());
 //			
-//				System.out.println(rankDocuments.toString());
-//		
+//		}		
+
+		List<RankDocuments> r = ranksDocList.stream().filter(c -> !Double.valueOf(c.getDhpscore()).isNaN())
+				.collect(Collectors.toList());
+//
+//		for (RankDocuments rankDocuments : r) {
+//			//if("james bond".equals(rankDocuments.getQuery()))
+//				//writer.write(rankDocuments.getQuery() + "  " + rankDocuments.getDoc().getTitle() +"  "+ rankDocuments.getDhpscore() + System.lineSeparator());
 //			
 //		}
-
-		Map<String, List<RankDocuments>> studlistGrouped = ranksDocList.stream()
-				.filter(c -> !Double.valueOf(c.getDhpscore()).isNaN())
-				.collect(Collectors.groupingBy(w -> w.getQuery()));
-
-		
-		//
-//		FileWriter writer = new FileWriter("di.txt");
-//		 for (String key : studlistGrouped.keySet()) {
-//			 writer.write(key + " " + studlistGrouped.get(key)  + System.lineSeparator());
-//		    }
+//
 //		writer.close();
-//		for (TermDocument termDocument : termsgList) {
-//
-//			if (termDocument.getCount() > 0) {
-//
-//				System.out.println("term >>>>>  " + termDocument.getTerm() + "    documentId   "
-//						+ termDocument.getDocument().getId() + "   count     " + termDocument.getCount()
-//						+ " doc length " + termDocument.getCurrentDocumentLength() + "    DPH   Score"
-//						+ termDocument.getDphScore());
-//
-//			}
-//		}
+		Map<String, List<RankDocuments>> studlistGrouped = r.stream()
+				.collect(Collectors.groupingBy(RankDocuments::getQuery));
+		FileWriter writer = new FileWriter("jk.txt");
+		for (String key : studlistGrouped.keySet()) {
+			List<RankDocuments> hh = studlistGrouped.get(key);
+			for (RankDocuments rankDocuments : hh) {
+				System.out
+						.println(key + "    " + rankDocuments.getDoc().getTitle() + " " + rankDocuments.getDhpscore());
+			}
 
-		// doc similarity
-		// remove
+		}
 
-		return null; // replace this with the the list of DocumentRanking output by your topology
+		List<DocumentRanking> documentRankingList = new ArrayList<DocumentRanking>();
+		for (String key : studlistGrouped.keySet()) {
+			DocumentRanking docRank = new DocumentRanking();
+			docRank.setQuery(key);
+			List<RankedResult> results = new ArrayList<RankedResult>();
+			List<RankDocuments> tk = studlistGrouped.get(key);
+
+			System.out.println(" final for query " + ">>>>>>>>>>>>>     " + key);
+			for (int i = 0; i < 10; i++) {
+				System.out.println(tk.get(i).getDoc().getTitle());
+			}
+
+			ArrayList<RankDocuments> a1 = new ArrayList<RankDocuments>(tk);
+			for (int i = 0; i < a1.size() - 1; i++) {
+				for (int k = i + 1; k < a1.size(); k++) {
+					String doc1 = a1.get(i).getDoc().getTitle();
+					String doc2 = a1.get(k).getDoc().getTitle();
+					double similarity = TextDistanceCalculator.similarity(doc1, doc2);
+					if (similarity < 0.5) {
+						a1.remove(k);
+					}
+
+				}
+			}
+			System.out.println(" final for query " + ">>>>>>>>>>>>>     " + key);
+			for (int i = 0; i < 10; i++) {
+				RankedResult ranked = new RankedResult();
+				ranked.setArticle(a1.get(i).getDoc());
+				ranked.setDocid(a1.get(i).getDoc().getId());
+				ranked.setScore(a1.get(i).getDhpscore());
+				results.add(ranked);
+
+			}
+			docRank.setResults(results);
+			documentRankingList.add(docRank);
+		}
+		return documentRankingList;
+
 	}
 
 }
