@@ -137,7 +137,7 @@ public class AssessedExercise {
 		// process queries
 		StopWordRemovalFlatMap queryStopWordRemoval = new StopWordRemovalFlatMap();
 		Dataset<Query> processedQueries = queries.flatMap(queryStopWordRemoval, Encoders.bean(Query.class));
-
+		
 		// length of corpus
 		LongAccumulator documentLengthAccumulator = spark.sparkContext().longAccumulator();
 		LongAccumulator totalDocsInCorpusAccumulator = spark.sparkContext().longAccumulator();
@@ -147,6 +147,7 @@ public class AssessedExercise {
 				documentLengthAccumulator, totalDocsInCorpusAccumulator);
 		Dataset<NewsArticle> processedDocuments = news.flatMap(documentStopWordRemoval,
 				Encoders.bean(NewsArticle.class));
+		
 		processedDocuments.collectAsList();
 		long documentLengthCorpus = documentLengthAccumulator.value();
 		long docNumbers = totalDocsInCorpusAccumulator.value();
@@ -192,12 +193,6 @@ public class AssessedExercise {
 		Dataset<TermDocument> termsDocumentWithScore = termsg.flatMap(dphScore, Encoders.bean(TermDocument.class));
 		List<TermDocument> termsgList = termsDocumentWithScore.collectAsList();
 
-//		FileWriter writer = new FileWriter("jacetk.txt");
-//		for (TermDocument termDocument : termsgList) {
-//			if (termDocument.getTerm().equals("jame")&& termDocument.getDphScore()>0) 
-//			writer.write(termDocument.getDphScore() + "   "+ termDocument.getTerm() + "   "+ termDocument.getDocument().getTitle() + System.lineSeparator());
-//		}
-
 		TransformTuples tu = new TransformTuples();
 
 		Dataset<Tuple3<String, NewsArticle, Double>> termtransform = termsDocumentWithScore.map(tu,
@@ -212,73 +207,57 @@ public class AssessedExercise {
 		List<RankDocuments> ranksDocList = ranks.collectAsList();
 
 		Collections.sort(ranksDocList, Collections.reverseOrder());
-//		//FileWriter writer = new FileWriter("jk.txt");
-//		for (RankDocuments rankDocuments : ranksDocList) {
-//				//System.out.println(rankDocuments.getQuery().getOriginalQuery() + "  " + rankDocuments.getDoc().getTitle());
-//				//writer.write(rankDocuments.getQuery() + "  " + rankDocuments.getDoc().getTitle() +" "+ rankDocuments.getDhpscore()  + System.lineSeparator());
-//			
-//		}		
 
 		List<RankDocuments> r = ranksDocList.stream().filter(c -> !Double.valueOf(c.getDhpscore()).isNaN())
 				.collect(Collectors.toList());
-//
-//		for (RankDocuments rankDocuments : r) {
-//			//if("james bond".equals(rankDocuments.getQuery()))
-//				//writer.write(rankDocuments.getQuery() + "  " + rankDocuments.getDoc().getTitle() +"  "+ rankDocuments.getDhpscore() + System.lineSeparator());
-//			
-//		}
-//
-//		writer.close();
+
+		r.stream().forEach(k -> k.setDhpscore(divideScore(k)));
+		
 		Map<String, List<RankDocuments>> studlistGrouped = r.stream()
 				.collect(Collectors.groupingBy(RankDocuments::getQuery));
-		FileWriter writer = new FileWriter("jk.txt");
-		for (String key : studlistGrouped.keySet()) {
-			List<RankDocuments> hh = studlistGrouped.get(key);
-			for (RankDocuments rankDocuments : hh) {
-				System.out
-						.println(key + "    " + rankDocuments.getDoc().getTitle() + " " + rankDocuments.getDhpscore());
-			}
-
-		}
 
 		List<DocumentRanking> documentRankingList = new ArrayList<DocumentRanking>();
 		for (String key : studlistGrouped.keySet()) {
 			DocumentRanking docRank = new DocumentRanking();
-			docRank.setQuery(key);
+			
 			List<RankedResult> results = new ArrayList<RankedResult>();
 			List<RankDocuments> tk = studlistGrouped.get(key);
 
-			System.out.println(" final for query " + ">>>>>>>>>>>>>     " + key);
-			for (int i = 0; i < 10; i++) {
-				System.out.println(tk.get(i).getDoc().getTitle());
-			}
-
 			ArrayList<RankDocuments> a1 = new ArrayList<RankDocuments>(tk);
-			for (int i = 0; i < a1.size() - 1; i++) {
+			ArrayList<RankDocuments> a2 = new ArrayList<RankDocuments>();
+			  
+			Query query = a1.get(0).getOriginalQuery();
+			for (int i = 0; i < a1.size()-1; i++) {
 				for (int k = i + 1; k < a1.size(); k++) {
 					String doc1 = a1.get(i).getDoc().getTitle();
 					String doc2 = a1.get(k).getDoc().getTitle();
 					double similarity = TextDistanceCalculator.similarity(doc1, doc2);
 					if (similarity < 0.5) {
-						a1.remove(k);
+						a2.add(a1.get(k));
 					}
-
 				}
 			}
-			System.out.println(" final for query " + ">>>>>>>>>>>>>     " + key);
+			a1.removeAll(a2);
 			for (int i = 0; i < 10; i++) {
 				RankedResult ranked = new RankedResult();
 				ranked.setArticle(a1.get(i).getDoc());
 				ranked.setDocid(a1.get(i).getDoc().getId());
 				ranked.setScore(a1.get(i).getDhpscore());
 				results.add(ranked);
-
 			}
+			docRank.setQuery(query);
 			docRank.setResults(results);
 			documentRankingList.add(docRank);
 		}
 		return documentRankingList;
 
+	}
+	
+	static double divideScore(RankDocuments r) {
+		String[] splitted = r.getQuery().trim().split(" ");
+		int selectedItems = splitted.length;
+		double k = r.getDhpscore()/selectedItems;
+		return k;
 	}
 
 }

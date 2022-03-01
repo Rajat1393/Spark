@@ -52,7 +52,7 @@ public class GetDocumentRank implements FlatMapFunction<Query, RankDocuments> {
 							rankeddocuments.set(index, r9);
 						}
 					} else {
-						r9 = new RankDocuments(t.getOriginalQuery(), x._2(), x._3());
+						r9 = new RankDocuments(t.getOriginalQuery(), x._2(), x._3(),t);
 						rankeddocuments.add(r9);
 					}
 

@@ -12,21 +12,21 @@ public class DocumentRanking implements Serializable{
 
 	private static final long serialVersionUID = 2675653150567946299L;
 	
-	String query;
+	Query query;
 	List<RankedResult> results;
 	
 	public DocumentRanking() {}
 	
-	public DocumentRanking(String query, List<RankedResult> results) {
+	public DocumentRanking(Query query, List<RankedResult> results) {
 		super();
 		this.query = query;
 		this.results = results;
 	}
 	
-	public String getQuery() {
+	public Query getQuery() {
 		return query;
 	}
-	public void setQuery(String query) {
+	public void setQuery(Query query) {
 		this.query = query;
 	}
 	public List<RankedResult> getResults() {
@@ -38,7 +38,7 @@ public class DocumentRanking implements Serializable{
 	
 	public String toString() {
 		StringBuilder builder = new StringBuilder();
-		builder.append(query);
+		builder.append(query.getOriginalQuery());
 		builder.append("\n");
 		
 		int counter = 1;
@@ -61,7 +61,7 @@ public class DocumentRanking implements Serializable{
 	
 	public void write(String outDirectory) {
 		try {
-			BufferedWriter writer = new BufferedWriter(new OutputStreamWriter(new FileOutputStream(outDirectory+"/"+query.replace(" ", "_"))));
+			BufferedWriter writer = new BufferedWriter(new OutputStreamWriter(new FileOutputStream(outDirectory+"/"+query.getOriginalQuery().replace(" ", "_"))));
 			writer.write(this.toString());
 			writer.close();
 		} catch (FileNotFoundException e) {
